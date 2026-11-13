@@ -1,0 +1,6 @@
+---
+exclude_paths:
+  - "apps/mobile/assets/diagram-renderer.html"
+  - "apps/mobile/src/components/workspace/MobileWysiwygTentapEditorHtml.ts"
+  - "apps/mobile/src/ui/theme/desktopThemes.generated.json"
+  - "src-tauri/resources/agent-docs/**"
