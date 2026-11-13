@@ -78,10 +78,10 @@ test('source plan validates repository versions and rejects dirty state before o
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
-test('external failures expose only the safe phase identifier', () => {
+test('external failures expose only safe phase and static failure diagnostics', () => {
   const phases = []
   const run = runner(process.cwd(), {}, () => { throw new Error('password=private'); }, (phase) => phases.push(phase))
-  assert.throws(() => run('anything', ['private'], 'compile'), { message: 'macos-release: compile failed' })
+  assert.throws(() => run('anything', ['private'], 'compile'), { message: 'macos-release: compile failed (status=unknown signal=none classifier=command-failed)' })
   assert.deepEqual(phases, ['compile'])
 })
 
@@ -284,3 +284,52 @@ for (const layout of ['metis/b2117d3e1946d5a3/out', 'metis-b2117d3e1946d5a3/out'
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
 }
+
+function capturedCommandFailure(error) {
+  const phases = []
+  const run = runner('/private/workspace', { PRIVATE_ENV: 'secret-env' }, () => { throw error }, (phase) => phases.push(phase))
+  try {
+    run('/private/executable', ['secret-argument'], 'frontend-build')
+    assert.fail('Command failure expected')
+  } catch (failure) {
+    assert.deepEqual(phases, ['frontend-build'])
+    return failure.message
+  }
+}
+
+for (const marker of ['Reached heap limit', 'Allocation failed', 'JavaScript heap out of memory']) {
+  test(`command failure reports a static heap classifier for ${marker}`, () => {
+    const error = Object.assign(new Error('secret-message'), {
+      status: 134, signal: 'SIGABRT',
+      stderr: Buffer.from(`secret-stderr ${marker} secret-token`), stdout: 'secret-stdout',
+    })
+    assert.equal(capturedCommandFailure(error), 'macos-release: frontend-build failed (status=134 signal=SIGABRT classifier=heap-out-of-memory)')
+  })
+}
+
+test('ordinary stderr remains private and receives only the default classifier', () => {
+  const error = { status: 1, signal: 'SIGTERM', stderr: 'secret-stderr', stdout: 'secret-stdout', message: 'secret-message' }
+  assert.equal(capturedCommandFailure(error), 'macos-release: frontend-build failed (status=1 signal=SIGTERM classifier=command-failed)')
+})
+
+for (const status of ['134 secret-status', NaN, Infinity, 1.5, { toString: () => 'secret-status' }]) {
+  test(`command failure rejects an unsafe exit status of type ${typeof status}`, () => {
+    const error = { status, signal: 'SIGABRT secret-signal', stderr: 'Allocation failed secret-stderr' }
+    assert.equal(capturedCommandFailure(error), 'macos-release: frontend-build failed (status=unknown signal=none classifier=heap-out-of-memory)')
+  })
+}
+
+test('command failure never coerces arbitrary stderr or signal objects', () => {
+  const malicious = { toString: () => { throw new Error('secret-coercion') } }
+  assert.equal(capturedCommandFailure({ status: 2, signal: malicious, stderr: malicious }), 'macos-release: frontend-build failed (status=2 signal=none classifier=command-failed)')
+})
+
+test('real child process failures expose status and classifier without captured output', () => {
+  const phases = []
+  const run = runner(process.cwd(), {}, undefined, (phase) => phases.push(phase))
+  const child = "process.stdout.write('private-stdout'); process.stderr.write('Allocation failed private-stderr'); process.exit(17)"
+  assert.throws(() => run(process.execPath, ['-e', child], 'frontend-build'), {
+    message: 'macos-release: frontend-build failed (status=17 signal=none classifier=heap-out-of-memory)',
+  })
+  assert.deepEqual(phases, ['frontend-build'])
+})

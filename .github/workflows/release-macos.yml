@@ -102,6 +102,7 @@ jobs:
 
       - name: Build, upload symbols, sign, notarize and verify
         env:
+          NODE_OPTIONS: --max-old-space-size=4096
           VITE_SENTRY_DSN: ${{ secrets.METIS_SENTRY_DESKTOP_DSN }}
           SENTRY_DSN: ${{ secrets.METIS_SENTRY_NATIVE_DSN }}
           VITE_TLDRAW_LICENSE_KEY: ${{ secrets.METIS_TLDRAW_LICENSE_KEY }}

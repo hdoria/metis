@@ -50,6 +50,21 @@ function signatureOutput(execute, file, args, options) {
   }
 }
 
+const CHILD_SIGNALS = new Set(['SIGABRT', 'SIGBUS', 'SIGFPE', 'SIGHUP', 'SIGILL', 'SIGINT', 'SIGKILL', 'SIGPIPE', 'SIGQUIT', 'SIGSEGV', 'SIGTERM', 'SIGTRAP', 'SIGXCPU', 'SIGXFSZ'])
+
+function hasHeapFailure(stderr) {
+  if (Buffer.isBuffer(stderr)) return hasHeapFailure(stderr.toString('utf8'))
+  if (typeof stderr !== 'string') return false
+  return /heap\s+limit|allocation\s+failed|javascript\s+heap\s+out\s+of\s+memory/i.test(stderr)
+}
+
+function commandFailure(error, phase) {
+  const status = Number.isSafeInteger(error?.status) ? error.status : 'unknown'
+  const signal = CHILD_SIGNALS.has(error?.signal) ? error.signal : 'none'
+  const classifier = hasHeapFailure(error?.stderr) ? 'heap-out-of-memory' : 'command-failed'
+  return new Error(`macos-release: ${phase} failed (status=${status} signal=${signal} classifier=${classifier})`)
+}
+
 const reportPhase = (phase) => process.stderr.write(`macos-release: ${phase}\n`)
 export function runner(root = ROOT, env = process.env, execute = execFileSync, report = reportPhase) {
   return (file, args, phase, childEnv = env) => {
@@ -59,7 +74,7 @@ export function runner(root = ROOT, env = process.env, execute = execFileSync, r
     try {
       if (file === 'codesign' && args.includes('--display')) return signatureOutput(execute, file, args, options).trim()
       return execute(file, args, options).trim()
-    } catch { throw new Error(`macos-release: ${phase} failed`) }
+    } catch (error) { throw commandFailure(error, phase) }
   }
 }
 

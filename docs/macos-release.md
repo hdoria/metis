@@ -42,6 +42,8 @@ Only the last two missing interactive credentials need manual entry on this Mac.
 
 The CI creates a disposable keychain and notarization profile. Cleanup runs even on failure and restores the prior keychain search list. The local Keychain database and local OAuth refresh credentials are not copied to GitHub. Apple identity/team are fixed to Popcode team `C42XKG5G6X`.
 
+The build step sets Node's old-space heap to 4096 MiB. The standard ARM runner's default heap was 2144 MiB and exhausted memory while generating the hidden source maps. Failed child commands report only a numeric status, an allowed signal and a fixed error classification; captured output and credentials remain suppressed.
+
 ## Build and verification sequence
 
 1. Build the frontend with hidden source maps. Sentry injects debug IDs and uploads the corresponding maps. Remove maps from the shipped frontend and hash its assets.
