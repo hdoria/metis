@@ -28,3 +28,11 @@ Originals and the disposable vault remain outside Git under this local capture s
 | metis-editor | `7b6513cc610857a0bf557062cce379bc781eb62cbc2573b8ade68fd8e7afe92f` | `a62e8dff6f372c0ed36a1fa8608eb81e71b21210594b0717e1c19cffbb1da36d` |
 | metis-connections | `3b8b21da3dd8263ba8c09ebd93acbad98b837684c674c680736aadc4bd1f5cf7` | `fe6a8406942adc79011d317734a03206a7f6babc26992b1d7335670ffb8ec8fc` |
 | metis-spreadsheet | `8dee4ec3653487e585579d0063b01457b26dc46910593486750e4c69235fb35c` | `a706f3d86d692b2675574fd8a4f0eefc110c8be3a24c72a8c2bd4a3926a4f87b` |
+
+## Hero device screen
+
+The `metis-atelier` hero and its 960/640-pixel variants use the actual `metis-editor.webp` capture above as the laptop display input. The surrounding Greek scene remains a generated composition. This composite was edited with the built-in GPT Image tool on 2026-11-13; the separate full application screenshots above remain unmodified captures. WebP conversion and responsive resizing use `cwebp`.
+
+Prompt used:
+
+> Use case: compositing / precise-object-edit. Edit Image 1, the existing Métis landing hero photograph. Image 2 is an ACTUAL SCREENSHOT OF THE MÉTIS APPLICATION and is the screen-content insert, not a stylistic reference. Replace ONLY the fictional green placeholder interface inside the laptop's display with the actual application screenshot from Image 2. Fit the screenshot into the existing display bezel with the correct four-corner perspective and keep its recognizable exact three-column interface: narrow left navigation, middle notes list and wide note editor showing 'Uma ideia puxa outra', real Portuguese labels and checklist. Use the real screenshot as faithfully as possible rather than inventing/redrawing another interface. The display should appear crisp, with only a subtle realistic warm reflection, preserving the screenshot's white/cream and pine-green UI. Keep EVERYTHING outside the display unchanged: laptop position, keyboard, aluminium body, marble table, Greek marble bust, columns, olive branches, sea, distant coastline, book, shadows, warm daylight, overall composition and original 1536x1024 landscape framing. No new objects, no browser chrome, no added captions, no external logos, no crop or zoom. Only the pixels inside the laptop display should change.
