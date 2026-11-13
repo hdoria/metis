@@ -25,7 +25,7 @@ pnpm tauri dev
 
 For a browser development preview, run `pnpm dev`. Run `pnpm build` to build the desktop frontend, `pnpm build:web` for the web app, and `pnpm docs:build` for the documentation.
 
-This is an independent repository. Validation runs locally with `pnpm lint`, `pnpm l10n:validate` and the tests relevant to each change. [CodeScene setup](docs/codescene.md) adds local pre-push Code Health validation and access to the Métis analysis project. CI workflows are not configured.
+This is an independent repository. [GitHub Actions CI](docs/ci.md) runs lint, locale checks, tests and the frontend build on pushes to main and pull requests. Run the relevant checks locally as well. [CodeScene setup](docs/codescene.md) adds local pre-push Code Health validation and access to the Métis analysis project.
 
 ## Releases
 

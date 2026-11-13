@@ -137,7 +137,8 @@ and Git.
 
 ## Local Validation
 
-The repository has no CI workflows. Set up the [CodeScene pre-push hook](codescene.md)
+[GitHub Actions CI](ci.md) runs lint, locale validation, tests and the frontend build.
+Set up the [CodeScene pre-push hook](codescene.md)
 with `pnpm codescene:setup` for local Code Health validation. Run the remaining checks
 explicitly and record their results before committing or pushing. The scripts in
 `package.json` are the source of truth for available local commands.

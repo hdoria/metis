@@ -6,7 +6,9 @@ This document describes the independent repository's tracked integrations and lo
 
 The repository reset removed the inherited CI workflows, Git hooks, Codacy, CodeScene, Verity and Lara configuration, dependencies and dedicated commands. The obsolete mobile OTA publishing scripts and repository-service ADRs were also removed. Local lint, builds, tests, localization validation and performance tools remain available through `package.json`.
 
-CodeScene has since been configured for the independent Métis project **87759**, with OAuth access, a project-scoped Codex MCP server and an opt-in local pre-push hook. The hook checks the actual pushed commit ranges and excludes four generated outputs. [CodeScene setup](codescene.md) documents installation, cloud exclusions and limitations. It supplies no GitHub-side enforcement and does not run application tests or builds. Other removed analysis/CI services remain unconfigured.
+CodeScene has since been configured for the independent Métis project **87759**, with OAuth access, a project-scoped Codex MCP server and an opt-in local pre-push hook. The hook checks the actual pushed commit ranges and excludes four generated outputs. [CodeScene setup](codescene.md) documents installation, cloud exclusions and limitations. It supplies no GitHub-side Code Health enforcement and does not run application tests or builds.
+
+[GitHub Actions CI](ci.md) now runs lint, locale validation, application/configuration tests, CodeScene hook tests and the frontend build. It uses standard Ubuntu runners for this public repository, no secrets, no cache and no uploaded artifacts. Other removed analysis/CI services remain unconfigured.
 
 Translation edits now happen directly in `src/lib/locales/*.json`, with `en.json` as the canonical keyset and `pnpm l10n:validate` as the local structural check. The manual Todoist commands and legacy network demo server were removed earlier. Future service integrations need their own configuration and validation.
 
@@ -36,4 +38,4 @@ A controlled execution of the unmodified SDK observed `licensed` for both `tauri
 
 ## Remaining release work
 
-Automated signed releases, desktop update delivery, mobile OAuth/EAS provisioning and a continued tldraw license require separate work. The repository cleanup does not provision those services or change users' telemetry consent. Builds and tests still run explicitly; the installed pre-push hook supplies only its Code Health validation result.
+Automated signed releases, desktop update delivery, mobile OAuth/EAS provisioning and a continued tldraw license require separate work. The repository cleanup does not provision those services or change users' telemetry consent. The installed pre-push hook supplies only its Code Health validation result; the CI supplies the documented build/test results. Native packaging and browser/mobile checks remain separate.
