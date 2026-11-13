@@ -15,8 +15,8 @@
 - [x] Register project-scoped MCP and verify the connection to project 87759.
 - [x] Document installation, exclusions, limitations and recovery; update stale integration statements.
 - [x] Obtain independent review and run required local checks.
-- [ ] Commit and push through the installed hook; record publication in the task completion report.
-- [ ] After the user saves cloud exclusions, trigger and inspect a fresh cloud analysis. Otherwise report that cloud step as pending.
+- [x] Commit and push through the installed hook; implementation published as `fc371d1`.
+- [x] After the user saves cloud exclusions, trigger and inspect a fresh cloud analysis: job 8419369 completed successfully.
 
 ## Stop condition
 
@@ -24,4 +24,6 @@ Stop after the verified commit reaches `main`, local hook/MCP setup is confirmed
 
 ## Local evidence, 2026-11-13
 
-`pnpm codescene:test`: 18 passed. `pnpm lint` and `pnpm build`: passed (existing large-chunk and module-import warnings). Independent review approved the change. CLI 1.0.58 scored the hook script and tests 10 with no findings. A real healthy push to a disposable bare remote passed; a deliberately degraded change (10 → 6.73) was rejected, preserving the remote commit. A truncated-scope regression test failed before the count check and passed after it. MCP confirmed project 87759 and tracking disabled. Cloud exclusions were saved by the maintainer; a fresh analysis follows publication.
+`pnpm codescene:test`: 18 passed. `pnpm lint` and `pnpm build`: passed (existing large-chunk and module-import warnings). Independent review approved the change. CLI 1.0.58 scored the hook script and tests 10 with no findings. A real healthy push to a disposable bare remote passed; a deliberately degraded change (10 → 6.73) was rejected, preserving the remote commit. A truncated-scope regression test failed before the count check and passed after it. MCP confirmed project 87759 and tracking disabled.
+
+The production push compared `aa5869c` to `fc371d1`: 13 changed files, two Code Health eligible files, passed. Cloud job [8419369](https://codescene.io/projects/87759/jobs/8419369/results) completed with status `ok`, includes `fc371d1`, and lists 3,732 files across four API pages. None matched the four generated-output exclusions. Cloud average Code Health was 9.98 and hotspot Code Health 9.9. No CI workflow or PR enforcement was added.

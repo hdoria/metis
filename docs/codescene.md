@@ -62,3 +62,9 @@ metis/apps/mobile/assets/diagram-renderer.html;metis/apps/mobile/src/components/
 CodeScene's [path-pattern documentation](https://codescene.io/docs/configuration/project-config/index.html#exclude-specific-files-and-folders-from-an-analysis) requires the repository-root prefix and semicolon separators. The public [Cloud API](https://api.codescene.io/v2/docs/codescene.json) does not expose configuration editing; changing the local JSON does not update the dashboard. Save the cloud settings, run a fresh analysis, and verify the scope before comparing scores.
 
 The initial imported commit provides very little history for hotspot, ownership and delivery trends. Treat the first dashboard as a starting point, not proof that every part of the application is healthy.
+
+## Setup verification, 2026-11-13
+
+Implementation commit `fc371d1` passed the installed hook on its push to `main`. All 18 hook tests, lint and application build passed; independent review approved the setup. A real CLI test accepted a healthy push and rejected an introduced regression without changing the disposable remote.
+
+After the cloud exclusions were saved, [analysis 8419369](https://codescene.io/projects/87759/jobs/8419369/results) completed with status `ok` and included that implementation commit. All four pages of its file listing were checked: 3,732 files, no paths matching the four generated-output exclusions. Average Code Health was 9.98; hotspot Code Health was 9.9.
