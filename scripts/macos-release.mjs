@@ -149,12 +149,12 @@ export function validateNativeSymbols(upload, expectedUUID) {
   return upload
 }
 
-function matchingDsym(root, executable, run) {
+export function matchingDsym(root, executable, run) {
   const uuids = (file) => run('xcrun', ['dwarfdump', '--uuid', file], 'debug-uuid').split('\n').map((line) => /^UUID: ([A-Fa-f0-9-]+) \(arm64\)/.exec(line)?.[1]?.toUpperCase()).filter(Boolean).sort().join(',')
   const expected = uuids(executable)
   ensure(UUID.test(expected), 'single executable debug UUID required')
   const build = path.join(root, 'src-tauri/target/release/build')
-  const candidates = readdirSync(build).filter((name) => name.startsWith('metis-')).flatMap((name) => files(path.join(build, name))).filter((file) => file.endsWith('/metis.dSYM/Contents/Resources/DWARF/metis'))
+  const candidates = readdirSync(build).filter((name) => name === 'metis' || name.startsWith('metis-')).flatMap((name) => files(path.join(build, name))).filter((file) => file.endsWith('/metis.dSYM/Contents/Resources/DWARF/metis'))
   const match = candidates.find((file) => uuids(file) === expected)
   ensure(match, 'matching metis.dSYM not found')
   return { directory: match.slice(0, -'/Contents/Resources/DWARF/metis'.length), uuid: expected }

@@ -251,3 +251,36 @@ test('notarization stores the final accepted status and sanitized log after wait
     assert.deepEqual(JSON.parse(readFileSync(path.join(directory, 'app-notary-log.json'), 'utf8')), { jobId: id, status: 'Accepted', statusCode: 0, issues: [{ severity: 'warning', code: 1 }] })
   } finally { rmSync(directory, { recursive: true, force: true }) }
 })
+
+function dsymFixture(layout, symbolUUID) {
+  const root = mkdtempSync(path.join(tmpdir(), 'metis-dsym-test-'))
+  const directory = path.join(root, 'src-tauri/target/release/build', layout, 'metis.dSYM')
+  const dwarf = path.join(directory, 'Contents/Resources/DWARF/metis')
+  const executable = path.join(root, 'src-tauri/target/release/metis')
+  mkdirSync(path.dirname(dwarf), { recursive: true })
+  writeFileSync(dwarf, 'debug symbols')
+  writeFileSync(executable, 'executable')
+  const run = (file, args) => {
+    assert.equal(file, 'xcrun')
+    assert.deepEqual(args.slice(0, 2), ['dwarfdump', '--uuid'])
+    const uuid = args[2] === executable ? nativeUUID : symbolUUID
+    return `UUID: ${uuid} (arm64) ${args[2]}`
+  }
+  return { root, directory, executable, run }
+}
+
+for (const layout of ['metis/b2117d3e1946d5a3/out', 'metis-b2117d3e1946d5a3/out']) {
+  test(`dSYM discovery matches executable UUID in Cargo layout ${layout}`, () => {
+    const { root, directory, executable, run } = dsymFixture(layout, nativeUUID)
+    try {
+      assert.deepEqual(releasePipeline.matchingDsym(root, executable, run), { directory, uuid: nativeUUID })
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+
+  test(`dSYM discovery rejects mismatched UUID in Cargo layout ${layout}`, () => {
+    const { root, executable, run } = dsymFixture(layout, manifest.notarization.app)
+    try {
+      assert.throws(() => releasePipeline.matchingDsym(root, executable, run), /matching metis.dSYM not found/)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
+}
