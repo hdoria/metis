@@ -1,5 +1,7 @@
 # macOS local package
 
+For repeatable signed packaging and GitHub draft automation, use the [macOS release workflow](macos-release.md). The artifacts and checks below remain historical evidence for their exact builds.
+
 The current package targets Apple Silicon (arm64), macOS 11 or later. The official local package is signed with Developer ID Application: Popcode (`C42XKG5G6X`), notarized by Apple and accepted by Gatekeeper. The earlier ad-hoc test build is retained separately. For the newest build with Sentry and the tldraw trial, use the Sentry-enabled evaluation package below.
 
 ## Original signed package

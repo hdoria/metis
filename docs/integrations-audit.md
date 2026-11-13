@@ -38,4 +38,6 @@ A controlled execution of the unmodified SDK observed `licensed` for both `tauri
 
 ## Remaining release work
 
+The [macOS draft-release workflow](macos-release.md) automates Apple Silicon packaging with the existing Popcode identity, Sentry symbols and independent app/DMG notarization. Initial setup requires the release secrets and a successful end-to-end run; the presence of a workflow alone is not signing evidence. Public application distribution still depends on the continued tldraw license. Automatic updates remain disabled.
+
 Automated signed releases, desktop update delivery, mobile OAuth/EAS provisioning and a continued tldraw license require separate work. The repository cleanup does not provision those services or change users' telemetry consent. The installed pre-push hook supplies only its Code Health validation result; the CI supplies the documented build/test results. Native packaging and browser/mobile checks remain separate.

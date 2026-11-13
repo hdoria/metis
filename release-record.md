@@ -1,6 +1,6 @@
 # Métis verification record
 
-Current repository operation uses local validation, with no CI workflows, Git hooks or repository analysis services. See [Getting Started](docs/GETTING-STARTED.md#local-validation) and the [integration audit](docs/integrations-audit.md). Entries below record earlier builds and investigations; their old commit IDs and CI runs belong to the archived repository. They are not validation evidence for the independent repository.
+Current repository operation uses GitHub Actions quality CI, Codacy coverage and local CodeScene checks. See [Getting Started](docs/GETTING-STARTED.md#local-validation), the [integration audit](docs/integrations-audit.md) and the [macOS draft-release workflow](docs/macos-release.md). Entries below record earlier builds and investigations; their old commit IDs and CI runs belong to the archived repository. They are not validation evidence for the independent repository.
 
 ## Initial identity verification
 

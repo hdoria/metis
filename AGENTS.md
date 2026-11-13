@@ -8,6 +8,8 @@ Follow the user's global AGENTS.md. Plan before cross-cutting changes. Keep chan
 
 For Codacy configuration or coverage uploads, read docs/codacy.md. Preserve coverage thresholds and analyze maintained sources; exclude only demonstrated generated output. Keep the upload token restricted to trusted main runs.
 
+For macOS packaging or release automation, read docs/macos-release.md. Use the shared draft-only pipeline, preserve Sentry asset/symbol matching, and verify both the disk image and its mounted app. Keep public distribution pending the continued whiteboard license.
+
 ## Identity and privacy
 
 Use Métis in display text and metis in machine identifiers. Keep configuration in io.github.hdoria.metis. Never read another application's secrets or modify its settings. Test only disposable vaults. Preserve LICENSE and dependency licenses. Keep applicable component notices in site/landing/public/creditos.html, and include that page in distribution resources.

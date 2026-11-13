@@ -70,6 +70,9 @@ jobs:
       - name: Test coverage uploader failure handling
         run: node --test scripts/upload-codacy-coverage.test.mjs
 
+      - name: Test macOS release policy and keychain isolation
+        run: node --test scripts/macos-release.test.mjs scripts/macos-release-keychain.test.mjs
+
       - name: Build frontend
         run: pnpm build
 
