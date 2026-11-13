@@ -15,8 +15,8 @@ export default defineConfig({
     testTimeout: 30_000,
     coverage: {
       provider: 'v8',
-      reporter: ['text-summary', 'json-summary'],
-      reportsDirectory: join(tmpdir(), 'metis-server-coverage'),
+      reporter: ['text-summary', 'json-summary', 'lcov'],
+      reportsDirectory: process.env.METIS_SERVER_COVERAGE_DIR ?? join(tmpdir(), 'metis-server-coverage'),
       include: ['apps/server/src/**/*.ts', 'packages/*/src/**/*.ts'],
       // The entry point only wires the tested modules to the process and its environment.
       exclude: ['apps/server/src/main.ts'],

@@ -102,6 +102,7 @@ export default defineConfig({
 		maxWorkers: process.env.VITEST_MAX_WORKERS ?? 4,
 		testTimeout: Number(process.env.VITEST_TEST_TIMEOUT_MS ?? 10_000),
 		coverage: {
+			enabled: process.env.METIS_CI_COVERAGE === "1",
 			provider: "v8",
 			reporter: ["text", "json", "html", "lcov"],
 			// Keep coverage temp files off the mounted workspace to avoid flaky

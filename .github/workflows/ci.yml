@@ -47,11 +47,34 @@ jobs:
       - name: Validate translations
         run: pnpm l10n:validate
 
+      - name: Check Codacy upload credential
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: |
+          if [ -z "$CODACY_PROJECT_TOKEN" ]; then
+            echo "::error::Set the repository secret CODACY_PROJECT_TOKEN before running coverage upload. See docs/codacy.md."
+            exit 1
+          fi
+
       - name: Run application and configuration tests
+        env:
+          METIS_CI_COVERAGE: '1'
+          VITEST_COVERAGE_DIR: coverage/frontend
+          METIS_SERVER_COVERAGE_DIR: coverage/server
         run: pnpm test
 
       - name: Test CodeScene hook
         run: pnpm codescene:test
 
+      - name: Test coverage uploader failure handling
+        run: node --test scripts/upload-codacy-coverage.test.mjs
+
       - name: Build frontend
         run: pnpm build
+
+      - name: Upload coverage to Codacy
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        env:
+          CODACY_PROJECT_TOKEN: ${{ secrets.CODACY_PROJECT_TOKEN }}
+        run: bash scripts/upload-codacy-coverage.sh

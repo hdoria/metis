@@ -6,6 +6,8 @@ Free personal knowledge app. React 19 and TypeScript UI in src/, Tauri 2/Rust in
 
 Follow the user's global AGENTS.md. Plan before cross-cutting changes. Keep changes scoped. Run pnpm lint, pnpm build and relevant Vitest tests; run Rust checks for native changes and mobile checks for mobile changes. Use a fresh-context reviewer for release, updater, save and sync changes. Record actual test outcomes and platform limitations. Never claim unavailable checks passed.
 
+For Codacy configuration or coverage uploads, read docs/codacy.md. Preserve coverage thresholds and analyze maintained sources; exclude only demonstrated generated output. Keep the upload token restricted to trusted main runs.
+
 ## Identity and privacy
 
 Use Métis in display text and metis in machine identifiers. Keep configuration in io.github.hdoria.metis. Never read another application's secrets or modify its settings. Test only disposable vaults. Preserve LICENSE and dependency licenses. Keep applicable component notices in site/landing/public/creditos.html, and include that page in distribution resources.
