@@ -1,6 +1,6 @@
 # Codacy
 
-Status on 2026-11-13: quality analysis is active. Generated-output exclusions were published in `37cba2b` and Codacy confirmed the configuration, generated theme and 60 agent-documentation files ignored. Coverage configuration is prepared locally; publishing it and validating an authenticated upload await the repository secret `CODACY_PROJECT_TOKEN`.
+Quality analysis is active. Generated-output exclusions were published in `37cba2b` and Codacy confirmed the configuration, generated theme and 60 agent-documentation files ignored. Coverage reporting was published in `6f88db4`; the repository secret `CODACY_PROJECT_TOKEN` was configured on 2026-11-13. [CI executions](https://github.com/hdoria/metis/actions/workflows/ci.yml) record generation, upload and finalization results for each commit.
 
 ## Scope and acceptance
 
@@ -44,4 +44,4 @@ The workflow stores no GitHub artifacts/cache. Coverage data is sent to Codacy; 
 
 Frontend: 6,401 tests passed, one skipped; line coverage 89.70%, branch coverage 77.34%. Server: 1,033 passed, two skipped; line coverage 95.82%, branch coverage 88.96%. Both pass their existing thresholds. Lint and frontend build passed. Three offline uploader failure tests passed; independent review also exercised report/final failure propagation. All LCOV paths resolve to tracked files: frontend 943, server 72, with 25 shared files combined by Codacy.
 
-Authenticated upload, coverage displayed by Codacy and a hosted run with this coverage configuration remain unverified until the secret is available. The pre-existing non-coverage CI configuration remains on remote main until then.
+For hosted verification, require successful upload/finalization in CI and coverage data for the same commit in Codacy. A successful local report or the existence of a repository secret alone does not prove that Codacy received coverage.
