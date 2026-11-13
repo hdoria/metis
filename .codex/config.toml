@@ -1,0 +1,6 @@
+[mcp_servers.codescene]
+command = "cs-mcp"
+
+[mcp_servers.codescene.env]
+CS_DEFAULT_PROJECT_ID = "87759"
+CS_DISABLE_TRACKING = "1"

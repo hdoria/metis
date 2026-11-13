@@ -1,0 +1,10 @@
+{
+  "projectId": 87759,
+  "baseBranch": "main",
+  "excludeFiles": [
+    "apps/mobile/assets/diagram-renderer.html",
+    "apps/mobile/src/components/workspace/MobileWysiwygTentapEditorHtml.ts",
+    "apps/mobile/src/ui/theme/desktopThemes.generated.json"
+  ],
+  "excludeDirectories": ["src-tauri/resources/agent-docs/"]
+}
