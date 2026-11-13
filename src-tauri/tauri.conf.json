@@ -68,7 +68,7 @@
     },
     "resources": {
       "resources/mcp-server/**/*": "mcp-server/",
-      "resources/agent-docs/**/*": "agent-docs/",
+      "resources/agent-docs/": "agent-docs/",
       "../site/landing/public/creditos.html": "legal/creditos.html",
       "../LICENSE": "legal/LICENSE.txt"
     },
