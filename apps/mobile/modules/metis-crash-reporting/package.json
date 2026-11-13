@@ -1,0 +1,7 @@
+{
+  "name": "metis-crash-reporting",
+  "version": "0.1.0",
+  "description": "Consent-bound native crash reporting for Metis",
+  "private": true,
+  "license": "AGPL-3.0-only"
+}

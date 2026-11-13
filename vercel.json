@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @metis/landing build",
+  "outputDirectory": "site/landing/dist",
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "www.metisapp.com.br" }],
+      "destination": "https://metisapp.com.br/:path*",
+      "permanent": true
+    }
+  ]
+}

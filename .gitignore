@@ -1,0 +1,99 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+.expo/
+site/.vitepress/cache/
+site/.vitepress/dist/
+site/landing/dist/
+_site/
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Playwright
+/test-results/
+/playwright-report/
+
+# Coverage reports
+/coverage/
+
+# Demo vault and helper scripts
+demo-vault/
+generated-fixtures/
+select_demo_notes*.py
+final_selection.py
+
+# Claude Code task signals
+.claude-done
+.claude-blocked
+src-tauri/target
+
+# Generated mcp-server bundle (built by scripts/bundle-mcp-server.mjs)
+src-tauri/resources/mcp-server/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Dev screenshots
+screenshots/
+
+# Stale planning docs (keep locally if needed, not in repo)
+REDESIGN-PLAN.md
+SF-SYMBOLS-MIGRATION.md
+CODE-HEALTH-REPORT.md
+
+# Local home dir artifact from worktree ops
+(HOME)/
+
+# Runtime / process files
+.claude-pid
+
+# Generated vault index files (qmd/search artifacts)
+.metislegacy-index.json
+
+# Tauri signing keys (never commit private keys)
+*.key
+*.key.pub
+
+# Local environment variables (never commit)
+.env
+.env.local
+.env.*.local
+
+# Vercel project linking, local environment and deployment output.
+.vercel/
+
+# Expo native projects are generated locally by `expo prebuild`.
+apps/mobile/ios/
+apps/mobile/android/
+
+# Videos package (Remotion promo generation, isolated from main build)
+videos/node_modules/
+videos/output/
+videos/dist/
+videos/.remotion/
+
+# Hidden source maps of the web build, uploaded to Sentry by the deploy (TOL-232)
+apps/web/sourcemaps/
+
+# Native platform projects are generated with each maintainer's own signing setup.
+src-tauri/gen/

@@ -1,0 +1,26 @@
+/* Métis app colors. */
+:root {
+  --app-color: #17463F;
+  --app-light: #DCE9E0;
+  --app-tint: #EDF3ED;
+  --app-ink: #17463F;
+  --primary: #17463F;
+  --primary-foreground: #F6F5ED;
+  --secondary: #EDF3ED;
+  --secondary-foreground: #17463F;
+  --accent: #EDF3ED;
+  --accent-foreground: #17463F;
+  --ring: #17463F;
+  --chart-1: #17463F;
+  --sidebar-primary: #17463F;
+  --sidebar-primary-foreground: #F6F5ED;
+  --sidebar-accent: #EDF3ED;
+  --sidebar-accent-foreground: #17463F;
+  --sidebar-ring: #17463F;
+}
+@theme inline {
+  --color-app: var(--app-color);
+  --color-app-light: var(--app-light);
+  --color-app-tint: var(--app-tint);
+  --color-app-ink: var(--app-ink);
+}
