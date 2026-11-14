@@ -2,7 +2,7 @@
 
 The landing lives in `site/landing`. Use the repository root as the Vercel Root Directory so the workspace lockfile and the root LICENSE remain available. `vercel.json` builds only the landing and publishes `site/landing/dist`.
 
-Official domain: `metisapp.com.br`. The `www` hostname redirects permanently to the apex, preserving the request path. Both hostnames are attached to the same Vercel project.
+Official domain: `metisapp.com.br`. The `www` hostname redirects permanently to the apex, preserving the request path. `/updates/stable/latest.json` and `/updates/alpha/latest.json` redirect temporarily (307) to the latest published GitHub release's `latest.json`; desktop apps embed these URLs, so keep the paths stable even if hosting changes. See [macOS release](../macos-release.md#signed-updates). Both hostnames are attached to the same Vercel project.
 
 Team: `popcode`. Project: `metis-landing` (`prj_o7aaBYhx7xyuMcDYhEMekx1QcK8U`). Production fallback: https://metis-landing-roan.vercel.app. Dashboard: https://vercel.com/popcode/metis-landing.
 

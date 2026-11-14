@@ -6,6 +6,11 @@
   "outputDirectory": "site/landing/dist",
   "redirects": [
     {
+      "source": "/updates/:channel(stable|alpha)/latest.json",
+      "destination": "https://github.com/hdoria/metis/releases/latest/download/latest.json",
+      "permanent": false
+    },
+    {
       "source": "/:path*",
       "has": [{ "type": "host", "value": "www.metisapp.com.br" }],
       "destination": "https://metisapp.com.br/:path*",

@@ -1,6 +1,6 @@
 # Automated macOS draft releases
 
-This workflow prepares an Apple Silicon installer for macOS 11 or later. It signs with Popcode's existing Developer ID, uploads matching Sentry debug information, notarizes the app and DMG, and attaches the validated installer to a **draft** GitHub release. It never publishes a release or enables app updates.
+This workflow prepares an Apple Silicon installer for macOS 11 or later. It signs with Popcode's existing Developer ID, uploads matching Sentry debug information, notarizes the app and DMG, and attaches the validated installer and its signed updater archive to a **draft** GitHub release. It never publishes a release; installed copies see an update only after a person publishes it.
 
 The configured tldraw key is an evaluation license expiring on 2026-11-27. Keep binary distribution private until the appropriate continued license is configured. GitHub draft assets are visible only to repository users with write access. The workflow does not upload public Actions artifacts. The landing's license-pending notice remains appropriate until an actual distributable public release exists.
 
@@ -20,7 +20,7 @@ pnpm release:macos draft v0.1.0
 
 `plan` validates source/version and prints non-secret metadata. `build` requires an Apple Silicon Mac, Node 26, Rust and Sentry CLI 0.49.0. It creates outputs under `src-tauri/target/metis-release/<tag>-<source-sha-prefix>/`. Existing output directories are preserved rather than silently overwritten. Keep the source checkout at the build's SHA when running `draft`.
 
-Local builds read only the Métis files `~/.config/metis/observability/sentry.env` and `~/.config/metis/licensing/tldraw.env`. Signing uses the existing Popcode identity in Keychain and the `metis-popcode` notarization profile. Add `~/.cargo/bin` to the command's PATH if needed. Existing signed packages and installed applications are not replaced.
+Local builds read only the Métis files `~/.config/metis/observability/sentry.env`, `~/.config/metis/licensing/tldraw.env` and `~/.config/metis/signing/updater.env` (`TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). Signing uses the existing Popcode identity in Keychain and the `metis-popcode` notarization profile. Add `~/.cargo/bin` to the command's PATH if needed. Existing signed packages and installed applications are not replaced.
 
 ## CI setup
 
@@ -37,6 +37,8 @@ The runner needs these repository secrets:
 | `METIS_SENTRY_DESKTOP_DSN` | Existing frontend error-reporting destination |
 | `METIS_SENTRY_NATIVE_DSN` | Existing native error-reporting destination |
 | `METIS_TLDRAW_LICENSE_KEY` | The currently authorized whiteboard key |
+| `METIS_UPDATER_PRIVATE_KEY` | Contents of the Tauri updater private key (`~/.config/metis/signing/updater.key`) |
+| `METIS_UPDATER_KEY_PASSWORD` | Password of that private key |
 
 Only the last two missing interactive credentials need manual entry on this Mac. The private helper `~/.config/metis/signing/configurar-release-ci.command` guides Apple app-specific password entry and Sentry reauthorization/token creation. Values go directly to GitHub secrets and a private recovery file outside Git. Never paste them in chat or source files. Existing certificates are reused; no Fastlane nuke/revocation is part of release setup.
 
@@ -50,11 +52,20 @@ The build step sets Node's old-space heap to 4096 MiB. The standard ARM runner's
 2. Compile the native binary without rerunning Vite. Locate the dSYM whose arm64 UUID matches that binary and upload it with source information. Fail if the frontend changed after its upload.
 3. Use Tauri to bundle/sign the app only. Copy it into the release output, verify bundle ID, version, arm64 architecture, Popcode team, hardened runtime and actual MCP/docs/legal resources.
 4. Submit a ZIP of that app using notarytool, require `Accepted`, retrieve its log, staple and validate the ticket.
-5. Create the DMG from the stapled app and Applications shortcut. Sign it, notarize it independently, staple and validate its ticket. Assess app and DMG with Gatekeeper.
-6. Mount the DMG read-only, verify the actual packaged app, its ticket and matching executable, then detach it.
-7. Write `manifest.json` and `SHA256SUMS`. Only the installer and these two provenance files are attached to the validated draft. No source maps, credentials or diagnostic archives are attached.
+5. Archive the stapled app as `Metis_<version>_aarch64.app.tar.gz` without AppleDouble or extended-attribute entries. Extract it into a scratch directory and verify the extracted app like the DMG payload: a single `Métis.app` root, identical executable, signature, resources and stapled ticket. Sign it with `tauri signer sign --app-version`, verify the minisign signature against the `plugins.updater.pubkey` shipped in `tauri.conf.json`, require the signed version to equal the release version, and write `latest.json` pointing at this tag's archive. The `build` command removes the updater key from its own environment before running anything, so only the signing command receives it.
+6. Create the DMG from the stapled app and Applications shortcut. Sign it, notarize it independently, staple and validate its ticket. Assess app and DMG with Gatekeeper.
+7. Mount the DMG read-only, verify the actual packaged app, its ticket and matching executable, then detach it.
+8. Write `manifest.json` and `SHA256SUMS`. Only the installer, the updater archive, its `.sig`, `latest.json` and these two provenance files are attached to the validated draft. The draft step re-verifies checksums, the updater signature and the metadata before uploading. No source maps, credentials or diagnostic archives are attached.
 
 Both uploads retain the existing crash-reporting opt-in. Sentry releases include source/version metadata so each executable can resolve against its own uploaded symbols. See [Sentry setup](sentry-setup.md).
+
+## Signed updates
+
+Installed copies check `https://metisapp.com.br/updates/stable/latest.json` about three seconds after launch and from the build label or menu. Vercel answers with a temporary redirect to `https://github.com/hdoria/metis/releases/latest/download/latest.json`, which GitHub resolves to the newest published, non-prerelease release. Drafts are invisible to this path, so publishing a release is the act that ships an update. Until the first public release exists, the endpoint returns 404; automatic checks stay silent and only a manual check reports the failure.
+
+The updater verifies every download against the public key compiled into the app before installing it. The release version is bound into each signature, but `tauri-plugin-updater` 2.10 does not yet enforce that binding on the client, so control of `latest.json` (Vercel project or GitHub releases) remains part of the trust boundary. Only the main window checks for, offers and installs updates; automatic checks wait for settings to load and never interrupt a manual check, an offered update or a pending restart. The private key at `~/.config/metis/signing/updater.key` and its password are irreplaceable: if either is lost, existing installations can never accept another update. Keep both in the password manager in addition to the GitHub secrets. Never commit them, paste them in chat or rotate the public key without a release that still verifies with the old key.
+
+Linux, Windows and Intel macOS builds are not produced by this workflow. Their update checks stop before any network request and the app reports that automatic updates are not configured for that build.
 
 ## Failure handling
 
