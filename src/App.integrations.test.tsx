@@ -16,14 +16,13 @@ import type { Settings } from "./types";
 import { streamAiAgent } from "./utils/streamAiAgent";
 
 describe("App.integrations", () => {
-	it("keeps the build label disabled without a signed update service", async () => {
+	it("explains unavailable updates from the build label outside the desktop runtime", async () => {
         const checkForUpdates = vi.fn(async () => ({ kind: "up-to-date" as const }));
         vi.mocked(useUpdater).mockReturnValue(createMockUpdaterResult(checkForUpdates));
         render(<App />);
         await screen.findByText("All Notes");
-        const buildLabel = screen.getByTestId("status-build-number");
-        expect(buildLabel).toHaveAttribute("aria-disabled", "true");
-        fireEvent.click(buildLabel);
+        fireEvent.click(screen.getByTestId("status-build-number"));
+        expect(await screen.findByText("Automatic updates are not configured for this build.")).toBeInTheDocument();
         expect(checkForUpdates).not.toHaveBeenCalled();
         expect(screen.queryByTestId("update-banner")).not.toBeInTheDocument();
     });

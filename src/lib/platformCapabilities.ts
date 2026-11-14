@@ -37,7 +37,7 @@ export function resolvePlatformCapabilities(backendKind: VaultBackendKind): Plat
   return {
     git: isDesktop,
     mcp: isDesktop,
-    updater: false,
+    updater: backendKind === 'tauri',
     multiWindow: isDesktop,
     openCode: isDesktop,
     cliAgents: isDesktop,

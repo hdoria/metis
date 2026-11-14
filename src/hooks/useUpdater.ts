@@ -17,8 +17,6 @@ import { formatCalendarVersionForDisplay } from "../utils/calendarVersion";
 import { openExternalUrl } from "../utils/url";
 
 const RELEASE_NOTES_URL = "https://github.com/hdoria/metis/releases";
-// Enable only alongside a Métis-owned signing key and release service.
-export const SIGNED_UPDATES_ENABLED = false;
 const UPDATER_CHECK_TIMEOUT_MS = 10_000;
 
 function withTimeout<T>(operation: Promise<T>, timeoutMs: number): Promise<T> {
@@ -51,6 +49,7 @@ export type UpdateCheckResult =
 	| { kind: "up-to-date" }
 	| ({ kind: "available" } & UpdateVersionInfo)
 	| { kind: "package" }
+	| { kind: "unavailable" }
 	| { kind: "error" };
 
 export interface UpdateActions {
@@ -139,9 +138,21 @@ function reportUpdateCheckFailure(
 	currentCheckId: number,
 	setStatus: Dispatch<SetStateAction<UpdateStatus>>,
 	error: unknown,
+	background: boolean,
 ): UpdateCheckResult {
 	if (checkId !== currentCheckId) return { kind: "error" };
-	if (String(error).includes("system-package-updates-use-package-manager")) {
+	if (String(error).includes("updates-unavailable-on-this-platform")) {
+		setStatus({ state: "idle" });
+		return { kind: "unavailable" };
+	}
+	const isPackageManaged = String(error).includes(
+		"system-package-updates-use-package-manager",
+	);
+	if (background) {
+		setStatus({ state: "idle" });
+		return { kind: isPackageManaged ? "package" : "error" };
+	}
+	if (isPackageManaged) {
 		setStatus({ state: "error", kind: "package" });
 		return { kind: "package" };
 	}
@@ -152,13 +163,13 @@ function reportUpdateCheckFailure(
 
 function useAutomaticUpdateCheck(
 	automaticChecksEnabled: boolean,
-	checkForUpdates: () => Promise<UpdateCheckResult>,
+	runCheck: (background: boolean) => Promise<UpdateCheckResult>,
 ): void {
 	useEffect(() => {
-		if (!SIGNED_UPDATES_ENABLED || !automaticChecksEnabled || !isTauri()) return;
-		const timer = setTimeout(() => checkForUpdates(), 3000);
+		if (!automaticChecksEnabled || !isTauri()) return;
+		const timer = setTimeout(() => runCheck(true), 3000);
 		return () => clearTimeout(timer);
-	}, [automaticChecksEnabled, checkForUpdates]);
+	}, [automaticChecksEnabled, runCheck]);
 }
 
 async function downloadUpdate({
@@ -193,19 +204,25 @@ export function useUpdater(
 	automaticChecksEnabled = true,
 ): { status: UpdateStatus; actions: UpdateActions } {
 	const [status, setStatus] = useState<UpdateStatus>({ state: "idle" });
+	const statusRef = useRef(status);
+	useEffect(() => {
+		statusRef.current = status;
+	}, [status]);
 	const updateRef = useRef<AppUpdateMetadata | null>(null);
 	const checkSequence = useRef(0);
 	const packageUpdateRef = useRef(false);
 
-	const checkForUpdates = useCallback(async (): Promise<UpdateCheckResult> => {
+	const runCheck = useCallback(async (background: boolean): Promise<UpdateCheckResult> => {
 		if (!isTauri()) return { kind: "up-to-date" };
+		// A background check never interrupts a manual check, an offer, a download or a pending restart.
+		if (background && statusRef.current.state !== "idle") return { kind: "up-to-date" };
 		if (packageUpdateRef.current) {
-			setStatus({ state: "error", kind: "package" });
+			if (!background) setStatus({ state: "error", kind: "package" });
 			return { kind: "package" };
 		}
 
 		const checkId = ++checkSequence.current;
-		setStatus({ state: "checking" });
+		if (!background) setStatus({ state: "checking" });
 
 		try {
 			const update = await withTimeout(
@@ -225,13 +242,16 @@ export function useUpdater(
 				checkSequence.current,
 				setStatus,
 				error,
+				background,
 			);
 			if (result.kind === "package") packageUpdateRef.current = true;
 			return result;
 		}
 	}, [releaseChannel]);
 
-	useAutomaticUpdateCheck(automaticChecksEnabled, checkForUpdates);
+	const checkForUpdates = useCallback(() => runCheck(false), [runCheck]);
+
+	useAutomaticUpdateCheck(automaticChecksEnabled, runCheck);
 
 	const startDownload = useCallback(async () => {
 		await downloadUpdate({

@@ -87,6 +87,9 @@
           "metis"
         ]
       }
+    },
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5NzBCMTBCQ0U5QUM0QjgKUldTNHhKck9DN0Z3dVo0d3ptbkxJYituRGY0eTZkeTl6aHMwYUpLVmhBVk1tU1ZXTkRDY3FucUwK"
     }
   }
 }

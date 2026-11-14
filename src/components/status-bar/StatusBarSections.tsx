@@ -1,4 +1,3 @@
-import { SIGNED_UPDATES_ENABLED } from '../../hooks/useUpdater'
 import { BookOpen, GearSix as Settings, Megaphone, Moon, Package, Sun, type IconProps } from '@phosphor-icons/react'
 import type { ComponentType, MouseEventHandler, ReactNode } from 'react'
 import type { McpStatus } from '../../hooks/useMcpStatus'
@@ -113,15 +112,15 @@ function BuildNumberButton({
     : 'h-auto gap-1 rounded-sm px-1 py-0.5 text-[12px] font-medium text-muted-foreground hover:bg-[var(--hover)] hover:text-foreground'
 
   return (
-    <ActionTooltip copy={{ label: translate(locale, SIGNED_UPDATES_ENABLED ? 'status.update.check' : 'update.unavailable') }} side="top">
+    <ActionTooltip copy={{ label: translate(locale, 'status.update.check') }} side="top">
       <Button
         type="button"
         variant="ghost"
         size="xs"
         className={className}
-        onClick={SIGNED_UPDATES_ENABLED ? onCheckForUpdates : undefined}
-        aria-label={translate(locale, SIGNED_UPDATES_ENABLED ? 'status.update.check' : 'update.unavailable')}
-        aria-disabled={SIGNED_UPDATES_ENABLED && onCheckForUpdates ? undefined : true}
+        onClick={onCheckForUpdates}
+        aria-label={translate(locale, 'status.update.check')}
+        aria-disabled={onCheckForUpdates ? undefined : true}
         data-testid="status-build-number"
       >
         <span style={ICON_STYLE}>

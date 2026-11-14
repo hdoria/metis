@@ -142,10 +142,8 @@ fn setup_desktop_plugins(app: &mut tauri::App) -> Result<(), Box<dyn std::error:
 
 #[cfg(desktop)]
 fn install_desktop_runtime_plugins(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    if app_updater::SIGNED_UPDATES_ENABLED {
-        app.handle()
-            .plugin(tauri_plugin_updater::Builder::new().build())?;
-    }
+    app.handle()
+        .plugin(tauri_plugin_updater::Builder::new().build())?;
     app.handle().plugin(tauri_plugin_process::init())?;
     app.handle().plugin(tauri_plugin_opener::init())?;
     Ok(())

@@ -57,7 +57,6 @@ vi.mock('./components/Editor', () => ({
 }))
 
 vi.mock('./hooks/useUpdater', () => ({
-  SIGNED_UPDATES_ENABLED: false,
   restartApp: vi.fn(),
   useUpdater: () => ({
     status: { state: 'idle' },

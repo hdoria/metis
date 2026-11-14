@@ -49,11 +49,11 @@ fn release_channel_accepts_alpha() {
 fn release_channel_endpoints_match_expected_paths() {
     assert_eq!(
         ReleaseChannel::Alpha.updater_endpoint().unwrap().as_str(),
-        "https://hdoria.github.io/metis/alpha/latest.json"
+        "https://metisapp.com.br/updates/alpha/latest.json"
     );
     assert_eq!(
         ReleaseChannel::Stable.updater_endpoint().unwrap().as_str(),
-        "https://hdoria.github.io/metis/stable/latest.json"
+        "https://metisapp.com.br/updates/stable/latest.json"
     );
 }
 
@@ -253,10 +253,11 @@ fn github_alpha_release(
 }
 
 #[test]
-fn signed_updates_are_disabled_and_no_signing_key_is_bundled() {
+fn signed_updates_ship_only_the_public_verification_key() {
     let config: serde_json::Value =
         serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
-    assert!(!super::SIGNED_UPDATES_ENABLED);
-    assert!(config["plugins"].get("updater").is_none());
+    let updater = &config["plugins"]["updater"];
+    assert!(updater["pubkey"].as_str().is_some_and(|key| !key.trim().is_empty()));
+    assert!(updater.get("endpoints").is_none());
     assert_eq!(config["bundle"]["createUpdaterArtifacts"], false);
 }

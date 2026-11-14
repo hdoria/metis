@@ -11,15 +11,18 @@ use timeout::timeout_updater_check;
 const ALPHA_METADATA_ASSET_NAME: &str = "alpha-latest.json";
 const GITHUB_RELEASES_API_URL: &str =
     "https://api.github.com/repos/hdoria/metis/releases?per_page=100";
-const RELEASES_BASE_URL: &str = "https://hdoria.github.io/metis";
+const RELEASES_BASE_URL: &str = "https://metisapp.com.br/updates";
 const POISONED_STABLE_RECOVERY_FLOOR: &str = "2026.8.19";
 const UPDATER_HTTP_TIMEOUT: Duration = Duration::from_secs(5);
 const UPDATER_USER_AGENT: &str = concat!("Metis/", env!("CARGO_PKG_VERSION"));
-/// Signed updates remain disabled until Métis owns its release service and key.
-pub const SIGNED_UPDATES_ENABLED: bool = false;
-const UPDATES_UNAVAILABLE_MESSAGE: &str = "Métis updates are not configured. Download new versions from https://github.com/hdoria/metis/releases.";
 
 pub const SYSTEM_PACKAGE_UPDATE_MESSAGE: &str = "system-package-updates-use-package-manager";
+/// Release automation publishes signed updater archives only for Apple Silicon macOS.
+const UNSUPPORTED_PLATFORM_UPDATE_MESSAGE: &str = "updates-unavailable-on-this-platform";
+
+fn signed_updates_published_for_this_platform() -> bool {
+    cfg!(all(target_os = "macos", target_arch = "aarch64"))
+}
 
 fn system_package_update_required() -> bool {
     let is_linux = cfg!(target_os = "linux");
@@ -333,8 +336,8 @@ pub async fn check_for_app_update<R: Runtime>(
     app_handle: AppHandle<R>,
     release_channel: Option<String>,
 ) -> Result<Option<AppUpdateMetadata>, String> {
-    if !SIGNED_UPDATES_ENABLED {
-        return Err(UPDATES_UNAVAILABLE_MESSAGE.to_string());
+    if !signed_updates_published_for_this_platform() {
+        return Err(UNSUPPORTED_PLATFORM_UPDATE_MESSAGE.to_string());
     }
     if system_package_update_required() {
         return Err(SYSTEM_PACKAGE_UPDATE_MESSAGE.to_string());
@@ -362,8 +365,8 @@ pub async fn download_and_install_app_update<R: Runtime>(
     expected_version: String,
     on_event: Channel<AppUpdateDownloadEvent>,
 ) -> Result<(), String> {
-    if !SIGNED_UPDATES_ENABLED {
-        return Err(UPDATES_UNAVAILABLE_MESSAGE.to_string());
+    if !signed_updates_published_for_this_platform() {
+        return Err(UNSUPPORTED_PLATFORM_UPDATE_MESSAGE.to_string());
     }
     if system_package_update_required() {
         return Err(SYSTEM_PACKAGE_UPDATE_MESSAGE.to_string());

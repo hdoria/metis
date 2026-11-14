@@ -1,4 +1,3 @@
-import { SIGNED_UPDATES_ENABLED } from '../useUpdater'
 import { APP_COMMAND_IDS, getAppCommandShortcutDisplay } from '../appCommandCatalog'
 import type { CommandAction } from './types'
 import { rememberFeedbackDialogOpener } from '../../lib/feedbackDialogOpener'
@@ -76,7 +75,7 @@ function buildPrimarySettingsCommands({
         onOpenFeedback?.()
       },
     },
-    { id: 'check-updates', label: t('command.checkUpdates'), group: 'Settings', keywords: ['update', 'version', 'upgrade', 'release'], enabled: SIGNED_UPDATES_ENABLED, execute: () => { if (SIGNED_UPDATES_ENABLED) onCheckForUpdates?.() } },
+    { id: 'check-updates', label: t('command.checkUpdates'), group: 'Settings', keywords: ['update', 'version', 'upgrade', 'release'], enabled: Boolean(onCheckForUpdates), execute: () => onCheckForUpdates?.() },
   ]
 }
 

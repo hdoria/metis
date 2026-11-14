@@ -78,16 +78,21 @@ describe('StatusBar', () => {
     expect(screen.getByTestId('status-vault-reloading')).toHaveAccessibleName('Reloading vault from disk')
   })
 
-  it('does not check for updates without a signed channel', () => {
+  it('checks for updates from the build number', () => {
     const onCheckForUpdates = vi.fn()
     render(<StatusBar noteCount={100} vaultPath="/Users/hugo/MetisLegacy" vaults={vaults} onSwitchVault={vi.fn()} buildNumber="b281" onCheckForUpdates={onCheckForUpdates} />)
     fireEvent.click(screen.getByTestId('status-build-number'))
-    expect(onCheckForUpdates).not.toHaveBeenCalled()
+    expect(onCheckForUpdates).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the build number inert without an update handler', () => {
+    render(<StatusBar noteCount={100} vaultPath="/Users/hugo/MetisLegacy" vaults={vaults} onSwitchVault={vi.fn()} buildNumber="b281" />)
+    expect(screen.getByTestId('status-build-number')).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('build number shows the update tooltip on focus', async () => {
     render(<StatusBar noteCount={100} vaultPath="/Users/hugo/MetisLegacy" vaults={vaults} onSwitchVault={vi.fn()} buildNumber="b281" onCheckForUpdates={vi.fn()} />)
-    await expectTooltip(screen.getByRole('button', { name: 'Automatic updates are not configured for this build.' }), 'Automatic updates are not configured for this build.')
+    await expectTooltip(screen.getByRole('button', { name: 'Check for updates' }), 'Check for updates')
   }, 10_000)
 
   it('displays the active git branch in the status bar', () => {

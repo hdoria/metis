@@ -140,14 +140,89 @@ describe("useUpdater", () => {
 		expect(mockInvoke).not.toHaveBeenCalled();
 	});
 
-	it("does not check automatically until signed Métis updates are configured", async () => {
+	it("checks automatically shortly after startup", async () => {
 		vi.mocked(isTauri).mockReturnValue(true);
-		installInvokeHandlers({ checkResult: null });
+		installInvokeHandlers({ checkResult: makeUpdate() });
 
-		renderUpdater("stable");
+		const { result } = renderUpdater("stable");
 		await advanceAutoCheck();
 
-		expect(mockInvoke).not.toHaveBeenCalled();
+		expect(mockInvoke).toHaveBeenCalledWith("check_for_app_update", {
+			releaseChannel: "stable",
+		});
+		expect(result.current.status).toMatchObject({ state: "available" });
+	});
+
+	it("keeps a failed automatic check out of the banner", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		installInvokeHandlers({ checkResult: new Error("offline") });
+
+		const { result } = renderUpdater("stable");
+		await advanceAutoCheck();
+
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(result.current.status).toEqual({ state: "idle" });
+	});
+
+	it("keeps a downloaded update when a later automatic check runs", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		installInvokeHandlers({ checkResult: makeUpdate() });
+
+		const { result, rerender } = renderHook(
+			({ channel }) => useUpdater(channel, true),
+			{ initialProps: { channel: "stable" } },
+		);
+		await act(async () => {
+			await result.current.actions.checkForUpdates();
+		});
+		await act(async () => {
+			await result.current.actions.startDownload();
+		});
+		expect(result.current.status).toMatchObject({ state: "ready" });
+
+		installInvokeHandlers({ checkResult: new Error("offline") });
+		rerender({ channel: "alpha" });
+		await advanceAutoCheck();
+
+		expect(result.current.status).toMatchObject({ state: "ready" });
+	});
+
+	it("lets a manual check started before the automatic one finish with its own result", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		let resolveManual: (update: AppUpdateMetadata) => void = () => {};
+		mockInvoke.mockImplementationOnce(
+			() => new Promise((resolve) => { resolveManual = resolve; }),
+		);
+		mockInvoke.mockImplementation(() => Promise.reject(new Error("offline")));
+
+		const { result } = renderUpdater("stable");
+		let manual: Promise<unknown> = Promise.resolve();
+		act(() => {
+			manual = result.current.actions.checkForUpdates();
+		});
+		await advanceAutoCheck();
+		let outcome: unknown;
+		await act(async () => {
+			resolveManual(makeUpdate());
+			outcome = await manual;
+		});
+
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(outcome).toMatchObject({ kind: "available" });
+		expect(result.current.status).toMatchObject({ state: "available" });
+	});
+
+	it("does not show a checking state during the automatic check", async () => {
+		vi.mocked(isTauri).mockReturnValue(true);
+		mockInvoke.mockImplementation(() => new Promise(() => {}));
+
+		const { result } = renderUpdater("stable");
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(3100);
+		});
+
+		expect(mockInvoke).toHaveBeenCalledTimes(1);
+		expect(result.current.status).toEqual({ state: "idle" });
 	});
 
 	it("does not automatically check for updates when automatic checks are disabled", async () => {
@@ -325,6 +400,16 @@ describe("useUpdater", () => {
 			"[updater] Failed to check for updates",
 		);
 		expect(result.current.status).toEqual({ state: "error", kind: "check" });
+	});
+
+	it("reports platforms without published updates as unavailable, not as a failure", async () => {
+		const { result, outcome } = await performManualCheck(
+			"stable",
+			new Error("updates-unavailable-on-this-platform"),
+		);
+
+		expect(outcome).toEqual({ kind: "unavailable" });
+		expect(result.current.status).toEqual({ state: "idle" });
 	});
 
 	it("explains package-managed Linux updates without retrying the updater", async () => {
