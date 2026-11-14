@@ -7,7 +7,15 @@ import path from 'node:path'
 import {
   parseArgs, releasePaths, checkVersions, validateManifest, validateDraft,
   buildEnvironment, createPlan, draftRelease, hashFile, runner,
+  verifyUpdaterSignature, updaterMetadata, validateUpdaterMetadata, takeUpdaterSigningEnvironment, updaterFileNames, checksumText, signedUpdaterVersion,
 } from './macos-release.mjs'
+
+// Public half of a throwaway Tauri signer key and its signatures over UPDATER_FIXTURE; no private key is stored.
+const UPDATER_FIXTURE = 'metis-updater-fixture\n'
+const UPDATER_PUBKEY = 'dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ0NTMyMzBBQzI3RkNEQzIKUldUQ3pYL0NDaU5UUkU0dHhocS9OM2QveUt1OTNoUjM1bFdzS1RDWFp1TDkrbGJnZGc5eEdSNWQK'
+const UPDATER_SIGNATURE = 'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUQ3pYL0NDaU5UUkdNVDd6dXRZYXpMVUdKSDI4SktPRU1peWxYYXBodEVMUmpVZnRaMHRuRVBtNjkrZWVQb3d4Z0lnY2pSUXZyeGVWS3FwUmtxdWN5MDFxa2wwVzZrTWdZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NjY3OTk4CWZpbGU6Zml4dHVyZTAxMC5iaW4JdmVyc2lvbjowLjEuMApxQjZSM0szc0k0dkhhSEgvWnRxVlJEZFVVZ3AwOUQrbW1aZ0NtTldRK0Z5b0xPcGVZVGNuQWVNZXBaZjBkUVFzeUwxRHFVcTlXdDRXbW96dkZUOVhCZz09Cg=='
+const UPDATER_SIGNATURE_FOR_0_1_1 = 'dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUQ3pYL0NDaU5UUkk2cVJ1RVBVcTNOdzQzZEdhN2xYbFJvTXJlU3lsbU9WaHdBRFdIaFhsUS9rSXVlVGlKbmVkTzY5aDVrU2ZRRFIwSGRLdlFwbERVanBjZjZwbWdmeFFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzk0NjY3MjgzCWZpbGU6Zml4dHVyZS5iaW4JdmVyc2lvbjowLjEuMQpTZUVIQXRpV0x6QWpkQkhaOXZmZysvaHRKdVVkU1hzWFNKQ1ZQL0ZuTUJOR0ExVFpBWVNrTFVTRGlxQ2l4eGQxTGpVSzJIUmtXM1pkRmYrdmhVVnZDZz09Cg=='
+const OTHER_UPDATER_PUBKEY = 'dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEM4NzkwQzFEMTFERTNCOEIKUldTTE85NFJIUXg1eVBzVU1TTDgzNVVWY3V6TXF2RkpJU1hlVE85d2pGV01CSG9BU29QNkMwVUYK'
 
 const sha = 'a'.repeat(40)
 const plan = { tag: 'v0.1.0', version: '0.1.0', sha, target: 'aarch64-apple-darwin', outputDir: `src-tauri/target/metis-release/v0.1.0-${sha.slice(0, 12)}` }
@@ -15,6 +23,11 @@ const manifest = {
   tag: plan.tag, version: plan.version, sourceSHA: sha, target: plan.target,
   architecture: 'arm64', teamIdentifier: 'C42XKG5G6X',
   dmg: { file: 'Metis_0.1.0_aarch64.dmg', sha256: 'b'.repeat(64) },
+  updater: {
+    archive: { file: 'Metis_0.1.0_aarch64.app.tar.gz', sha256: 'c'.repeat(64) },
+    signature: { file: 'Metis_0.1.0_aarch64.app.tar.gz.sig', sha256: 'd'.repeat(64) },
+    metadata: { file: 'latest.json', sha256: 'e'.repeat(64) },
+  },
   notarization: { app: '11111111-1111-1111-1111-111111111111', dmg: '22222222-2222-2222-2222-222222222222' },
 }
 
@@ -37,7 +50,7 @@ test('release paths are deterministic, relative, and cannot escape the output ro
 
 test('manifest rejects foreign source, team, filename traversal, and extra private fields', () => {
   validateManifest(manifest, plan)
-  for (const replacement of [{ sourceSHA: 'c'.repeat(40) }, { architecture: 'x86_64' }, { teamIdentifier: 'OTHER' }, { token: 'secret' }, { dmg: { ...manifest.dmg, file: '../installer.dmg' } }, { notarization: { app: '', dmg: '' } }]) assert.throws(() => validateManifest({ ...manifest, ...replacement }, plan))
+  for (const replacement of [{ sourceSHA: 'c'.repeat(40) }, { architecture: 'x86_64' }, { teamIdentifier: 'OTHER' }, { token: 'secret' }, { dmg: { ...manifest.dmg, file: '../installer.dmg' } }, { updater: { ...manifest.updater, archive: { ...manifest.updater.archive, file: '../Metis.app.tar.gz' } } }, { updater: { archive: manifest.updater.archive } }, { notarization: { app: '', dmg: '' } }]) assert.throws(() => validateManifest({ ...manifest, ...replacement }, plan))
 })
 
 test('only a draft pointing to the exact source SHA can be replaced', () => {
@@ -45,11 +58,12 @@ test('only a draft pointing to the exact source SHA can be replaced', () => {
   for (const release of [{ isDraft: false, targetCommitish: sha, tagName: plan.tag }, { isDraft: true, targetCommitish: 'main', tagName: plan.tag }, { isDraft: true, targetCommitish: sha, tagName: 'v9.9.9' }]) assert.throws(() => validateDraft(release, plan))
 })
 
-test('compilation environment drops Apple authentication and Sentry token without mutating parent', () => {
-  const input = { APPLE_ID: 'private', APPLE_PASSWORD: 'private', APPLE_API_KEY: 'private', APPLE_SIGNING_IDENTITY: 'other', SENTRY_AUTH_TOKEN: 'private', SENTRY_DSN: 'dsn', PATH: 'path' }
+test('compilation environment drops Apple authentication, Sentry token and updater key without mutating parent', () => {
+  const input = { APPLE_ID: 'private', APPLE_PASSWORD: 'private', APPLE_API_KEY: 'private', APPLE_SIGNING_IDENTITY: 'other', SENTRY_AUTH_TOKEN: 'private', TAURI_SIGNING_PRIVATE_KEY: 'private', TAURI_SIGNING_PRIVATE_KEY_PASSWORD: 'private', SENTRY_DSN: 'dsn', PATH: 'path' }
   const output = buildEnvironment(input, plan)
   assert.equal(input.SENTRY_AUTH_TOKEN, 'private')
   assert.equal(output.SENTRY_AUTH_TOKEN, undefined)
+  assert.equal(Object.keys(output).some((key) => key.startsWith('TAURI_SIGNING_')), false)
   assert.equal(Object.keys(output).some((key) => key.startsWith('APPLE_')), false)
   assert.equal(output.SENTRY_RELEASE, `metis-native@0.1.0+${sha.slice(0, 12)}`)
   assert.equal(output.VITE_SENTRY_RELEASE, `metis-desktop@0.1.0+${sha.slice(0, 12)}`)
@@ -98,12 +112,21 @@ function draftFixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'metis-draft-test-'))
   const directory = path.join(root, plan.outputDir)
   mkdirSync(directory, { recursive: true })
+  mkdirSync(path.join(root, 'src-tauri'), { recursive: true })
+  writeFileSync(path.join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ plugins: { updater: { pubkey: UPDATER_PUBKEY } } }))
   const dmg = path.join(directory, manifest.dmg.file)
   writeFileSync(dmg, 'installer')
-  const actual = { ...manifest, dmg: { ...manifest.dmg, sha256: hashFile(dmg) } }
+  const names = updaterFileNames(plan.version)
+  const archive = path.join(directory, names.archive)
+  writeFileSync(archive, UPDATER_FIXTURE)
+  writeFileSync(path.join(directory, names.signature), UPDATER_SIGNATURE)
+  const metadata = path.join(directory, names.metadata)
+  writeFileSync(metadata, JSON.stringify(updaterMetadata(plan, UPDATER_SIGNATURE, new Date('2026-11-14T12:00:00Z'))))
+  const entry = (file) => ({ file, sha256: hashFile(path.join(directory, file)) })
+  const actual = { ...manifest, dmg: entry(manifest.dmg.file), updater: { archive: entry(names.archive), signature: entry(names.signature), metadata: entry(names.metadata) } }
   writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(actual))
-  writeFileSync(path.join(directory, 'SHA256SUMS'), `${actual.dmg.sha256}  ${actual.dmg.file}\n${hashFile(path.join(directory, 'manifest.json'))}  manifest.json\n`)
-  return { root, dmg }
+  writeFileSync(path.join(directory, 'SHA256SUMS'), checksumText(actual, hashFile(path.join(directory, 'manifest.json'))))
+  return { root, dmg, archive, metadata }
 }
 
 function mockGithub(overrides = {}, commands = []) {
@@ -147,11 +170,80 @@ test('installer checksum tampering fails before any external command', () => {
   const { root, dmg } = draftFixture()
   try {
     writeFileSync(dmg, 'tampered')
-    assert.throws(() => draftRelease(plan, { root, run: () => assert.fail('No command expected') }), /installer checksum mismatch/)
+    assert.throws(() => draftRelease(plan, { root, run: () => assert.fail('No command expected') }), /Metis_0\.1\.0_aarch64\.dmg checksum mismatch/)
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
-test('draft creates only an unpublished release and uploads the three public assets', () => {
+test('updater archive tampering fails before any external command', () => {
+  const { root, archive } = draftFixture()
+  try {
+    writeFileSync(archive, 'tampered')
+    assert.throws(() => draftRelease(plan, { root, run: () => assert.fail('No command expected') }), /app\.tar\.gz checksum mismatch/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('updater signature must match the public key shipped in the app', () => {
+  const { root } = draftFixture()
+  try {
+    writeFileSync(path.join(root, 'src-tauri/tauri.conf.json'), JSON.stringify({ plugins: { updater: { pubkey: OTHER_UPDATER_PUBKEY } } }))
+    assert.throws(() => draftRelease(plan, { root, run: () => assert.fail('No command expected') }), /updater signature does not match/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('updater signature verification follows the Tauri minisign format', () => {
+  const data = Buffer.from(UPDATER_FIXTURE)
+  assert.equal(verifyUpdaterSignature(data, UPDATER_SIGNATURE, UPDATER_PUBKEY), true)
+  assert.equal(verifyUpdaterSignature(Buffer.from('other bytes'), UPDATER_SIGNATURE, UPDATER_PUBKEY), false)
+  assert.equal(verifyUpdaterSignature(data, UPDATER_SIGNATURE, OTHER_UPDATER_PUBKEY), false)
+  assert.equal(verifyUpdaterSignature(data, '', UPDATER_PUBKEY), false)
+  const lines = Buffer.from(UPDATER_SIGNATURE, 'base64').toString('utf8').split('\n')
+  lines[2] = lines[2].replace('version:0.1.0', 'version:9.9.9')
+  assert.equal(verifyUpdaterSignature(data, Buffer.from(lines.join('\n')).toString('base64'), UPDATER_PUBKEY), false)
+})
+
+test('updater signatures carry the version they were signed for', () => {
+  assert.equal(signedUpdaterVersion(UPDATER_SIGNATURE), '0.1.0')
+  assert.equal(signedUpdaterVersion(UPDATER_SIGNATURE_FOR_0_1_1), '0.1.1')
+  assert.equal(signedUpdaterVersion(''), null)
+})
+
+test('draft rejects a valid signature bound to another version', () => {
+  const { root, archive } = draftFixture()
+  try {
+    const directory = path.dirname(archive)
+    const names = updaterFileNames(plan.version)
+    writeFileSync(path.join(directory, names.signature), UPDATER_SIGNATURE_FOR_0_1_1)
+    writeFileSync(path.join(directory, names.metadata), JSON.stringify(updaterMetadata(plan, UPDATER_SIGNATURE_FOR_0_1_1, new Date('2026-11-14T12:00:00Z'))))
+    const stored = JSON.parse(readFileSync(path.join(directory, 'manifest.json'), 'utf8'))
+    for (const role of ['signature', 'metadata']) stored.updater[role].sha256 = hashFile(path.join(directory, stored.updater[role].file))
+    writeFileSync(path.join(directory, 'manifest.json'), JSON.stringify(stored))
+    writeFileSync(path.join(directory, 'SHA256SUMS'), checksumText(stored, hashFile(path.join(directory, 'manifest.json'))))
+    assert.throws(() => draftRelease(plan, { root, run: () => assert.fail('No command expected') }), /bound to the release version/)
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+test('updater metadata points only at this release archive with its signature', () => {
+  const metadata = updaterMetadata(plan, UPDATER_SIGNATURE, new Date('2026-11-14T12:00:00Z'))
+  assert.deepEqual(metadata.platforms, { 'darwin-aarch64': { signature: UPDATER_SIGNATURE, url: 'https://github.com/hdoria/metis/releases/download/v0.1.0/Metis_0.1.0_aarch64.app.tar.gz' } })
+  validateUpdaterMetadata(metadata, UPDATER_SIGNATURE, plan)
+  const foreignUrl = { ...metadata, platforms: { 'darwin-aarch64': { ...metadata.platforms['darwin-aarch64'], url: 'https://example.com/Metis.app.tar.gz' } } }
+  for (const candidate of [{ ...metadata, version: '0.2.0' }, { ...metadata, token: 'x' }, foreignUrl, { ...metadata, pub_date: 'yesterday' }]) assert.throws(() => validateUpdaterMetadata(candidate, UPDATER_SIGNATURE, plan))
+  assert.throws(() => validateUpdaterMetadata(metadata, 'other-signature', plan))
+})
+
+test('updater signing key is taken out of the process environment before any command runs', () => {
+  const key = { TAURI_SIGNING_PRIVATE_KEY: 'key', TAURI_SIGNING_PRIVATE_KEY_PASSWORD: 'pass' }
+  const ciEnv = { GITHUB_ACTIONS: 'true', ...key, OTHER: 'x' }
+  assert.deepEqual(takeUpdaterSigningEnvironment(ciEnv, () => assert.fail('CI must not read local files')), key)
+  assert.deepEqual(ciEnv, { GITHUB_ACTIONS: 'true', OTHER: 'x' })
+  const localEnv = { PATH: 'path' }
+  assert.deepEqual(takeUpdaterSigningEnvironment(localEnv, () => key), key)
+  assert.deepEqual(localEnv, { PATH: 'path' })
+  assert.throws(() => takeUpdaterSigningEnvironment({ GITHUB_ACTIONS: 'true', TAURI_SIGNING_PRIVATE_KEY: 'key' }), /missing TAURI_SIGNING_PRIVATE_KEY_PASSWORD/)
+  assert.throws(() => takeUpdaterSigningEnvironment({}, () => ({})), /missing TAURI_SIGNING_PRIVATE_KEY/)
+})
+
+test('draft creates only an unpublished release and uploads the installer, updater and provenance assets', () => {
   const { root } = draftFixture()
   const commands = []
   try {
@@ -161,7 +253,8 @@ test('draft creates only an unpublished release and uploads the three public ass
     assert.equal(create.includes('--publish'), false)
     assert.equal(create[create.indexOf('--target') + 1], sha)
     const upload = commands.find((command) => command.includes('upload'))
-    assert.deepEqual(upload.slice(4, 7).map((file) => path.basename(file)), [manifest.dmg.file, 'manifest.json', 'SHA256SUMS'])
+    assert.deepEqual(upload.slice(4, 10).map((file) => path.basename(file)), [manifest.dmg.file, 'Metis_0.1.0_aarch64.app.tar.gz', 'Metis_0.1.0_aarch64.app.tar.gz.sig', 'latest.json', 'manifest.json', 'SHA256SUMS'])
+    assert.equal(upload[10], '--repo')
     const ci = commands.find((command) => command.includes('run'))
     assert.equal(ci[ci.indexOf('--workflow') + 1], 'ci.yml')
     assert.equal(ci[ci.indexOf('--commit') + 1], sha)

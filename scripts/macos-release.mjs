@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { createHash } from 'node:crypto'
+import { createHash, createPublicKey, verify } from 'node:crypto'
 import { closeSync, existsSync, mkdtempSync, mkdirSync, openSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import path from 'node:path'
@@ -15,6 +15,8 @@ const REPO = 'hdoria/metis'
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*)?$/
 const SHA = /^[a-f0-9]{40}$/
 const UUID = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i
+const UPDATER_PLATFORM = 'darwin-aarch64'
+const UPDATER_SIGNING_KEYS = ['TAURI_SIGNING_PRIVATE_KEY', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD']
 const ensure = (condition, message) => { if (!condition) throw new Error(`macos-release: ${message}`) }
 const json = (file) => JSON.parse(readFileSync(file, 'utf8'))
 const writeJson = (file, value) => writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`)
@@ -90,7 +92,7 @@ export function createPlan(tag, { root = ROOT, run = runner(root) } = {}) {
 
 export function buildEnvironment(env, plan) {
   const result = { ...env }
-  for (const key of Object.keys(result)) if (key.startsWith('APPLE_') || key === 'SENTRY_AUTH_TOKEN') delete result[key]
+  for (const key of Object.keys(result)) if (key.startsWith('APPLE_') || key.startsWith('TAURI_SIGNING_') || key === 'SENTRY_AUTH_TOKEN') delete result[key]
   const coreVersion = /^\d+\.\d+\.\d+/.exec(plan.version)[0]
   const qualifier = plan.version.slice(coreVersion.length).replace(/^[-+]/, '').replaceAll('+', '.')
   const buildId = [qualifier, plan.sha.slice(0, 12)].filter(Boolean).join('.')
@@ -110,6 +112,16 @@ function privateEnvironment(env) {
   }
   for (const key of ['VITE_SENTRY_DSN', 'SENTRY_DSN', 'VITE_TLDRAW_LICENSE_KEY']) ensure(Boolean(result[key]?.trim()), `missing ${key}`)
   ensure(result.SENTRY_ORG === 'popcode' && result.SENTRY_FRONTEND_PROJECT === 'metis-desktop' && result.SENTRY_NATIVE_PROJECT === 'metis-native', 'Sentry must use the configured Popcode desktop and native projects')
+  for (const key of Object.keys(result)) if (key.startsWith('TAURI_SIGNING_')) delete result[key]
+  return result
+}
+
+// Removes the updater key from env before any command runs, so only the signing command receives it.
+export function takeUpdaterSigningEnvironment(env, readLocal = () => parseEnv(readFileSync(path.join(homedir(), '.config/metis/signing/updater.env'), 'utf8'))) {
+  const source = env.GITHUB_ACTIONS ? { ...env } : { ...readLocal(), ...env }
+  for (const key of Object.keys(env)) if (key.startsWith('TAURI_SIGNING_')) delete env[key]
+  const result = Object.fromEntries(UPDATER_SIGNING_KEYS.map((key) => [key, source[key]]))
+  for (const key of UPDATER_SIGNING_KEYS) ensure(Boolean(result[key]?.trim()), `missing ${key}`)
   return result
 }
 
@@ -205,15 +217,17 @@ const staple = (file, run, env) => {
   run('xcrun', ['stapler', 'validate', file], 'staple-validate', env)
 }
 
-function releaseContext(plan, { root = ROOT, env = process.env, run = runner(root, env) }) {
+function releaseContext(plan, { root = ROOT, env = process.env, run = runner(root, env), updaterSigning }) {
   ensure(process.platform === 'darwin' && process.arch === 'arm64', 'build requires an Apple Silicon macOS host')
   ensure(Number(process.versions.node.split('.')[0]) === 26, 'build requires Node 26')
   const secrets = privateEnvironment(env)
+  ensure(UPDATER_SIGNING_KEYS.every((key) => updaterSigning?.[key]) && !Object.keys(env).some((key) => key.startsWith('TAURI_SIGNING_')), 'updater key must be taken out of the process environment before building')
+  updaterPublicKey(root)
   const compile = buildEnvironment(secrets, plan)
   const directory = path.join(root, plan.outputDir)
   ensure(!existsSync(directory), 'release output already exists; preserve it or remove it explicitly before rebuilding')
   // Signing uses the imported/existing keychain; Tauri never receives notarization credentials.
-  return { plan, root, run, directory, secrets, compile,
+  return { plan, root, run, directory, secrets, compile, updaterSigning,
     signing: { ...compile, APPLE_SIGNING_IDENTITY: IDENTITY },
     notary: { ...compile, METIS_NOTARY_PROFILE: env.METIS_NOTARY_PROFILE, METIS_NOTARY_KEYCHAIN: env.METIS_NOTARY_KEYCHAIN },
   }
@@ -275,12 +289,110 @@ function assessArtifacts(app, dmg, { run, notary }) {
   run('spctl', ['--assess', '--type', 'open', '--context', 'context:primary-signature', '--verbose=2', dmg], 'dmg-gatekeeper', notary)
 }
 
-function writeManifest(context, dmg, notarization) {
+export const updaterFileNames = (version) => {
+  const archive = `Metis_${version}_aarch64.app.tar.gz`
+  return { archive, signature: `${archive}.sig`, metadata: 'latest.json' }
+}
+
+function minisignLines(encoded) {
+  return Buffer.from(encoded.trim(), 'base64').toString('utf8').split('\n').map((line) => line.trim())
+}
+
+// Mirrors the updater plugin's minisign check so a key mismatch fails the build, not the user's update.
+export function verifyUpdaterSignature(data, signature, publicKey) {
+  const key = Buffer.from(minisignLines(publicKey)[1] ?? '', 'base64')
+  const [, signatureLine, trustedLine, globalLine] = minisignLines(signature)
+  const decoded = Buffer.from(signatureLine ?? '', 'base64')
+  const trustedComment = trustedLine?.startsWith('trusted comment: ') ? trustedLine.slice('trusted comment: '.length) : null
+  if (key.length !== 42 || key.subarray(0, 2).toString() !== 'Ed' || decoded.length !== 74 || trustedComment === null) return false
+  if (!decoded.subarray(2, 10).equals(key.subarray(2, 10))) return false
+  const algorithm = decoded.subarray(0, 2).toString()
+  if (algorithm !== 'ED' && algorithm !== 'Ed') return false
+  const message = algorithm === 'ED' ? createHash('blake2b512').update(data).digest() : data
+  const ed25519 = createPublicKey({ key: { kty: 'OKP', crv: 'Ed25519', x: key.subarray(10).toString('base64url') }, format: 'jwk' })
+  const fileSignature = decoded.subarray(10)
+  return verify(null, message, ed25519, fileSignature)
+    && verify(null, Buffer.concat([fileSignature, Buffer.from(trustedComment)]), ed25519, Buffer.from(globalLine ?? '', 'base64'))
+}
+
+export function signedUpdaterVersion(signature) {
+  const trusted = minisignLines(signature)[2] ?? ''
+  return /(?:^trusted comment: |\t)version:([^\t]+)(?:\t|$)/.exec(trusted)?.[1] ?? null
+}
+
+function verifySignedUpdater(data, signature, plan, root) {
+  ensure(verifyUpdaterSignature(data, signature, updaterPublicKey(root)), 'updater signature does not match the configured public key')
+  ensure(signedUpdaterVersion(signature) === plan.version, 'updater signature must be bound to the release version')
+}
+
+export function updaterPublicKey(root = ROOT) {
+  const pubkey = json(path.join(root, 'src-tauri/tauri.conf.json')).plugins?.updater?.pubkey
+  ensure(typeof pubkey === 'string' && pubkey.trim().length > 0, 'tauri.conf.json must contain the updater public key')
+  return pubkey
+}
+
+export function updaterMetadata(plan, signature, publishedAt) {
+  return {
+    version: plan.version,
+    notes: `Métis ${plan.version}`,
+    pub_date: publishedAt.toISOString(),
+    platforms: { [UPDATER_PLATFORM]: { signature, url: `https://github.com/${REPO}/releases/download/${plan.tag}/${updaterFileNames(plan.version).archive}` } },
+  }
+}
+
+export function validateUpdaterMetadata(metadata, signature, plan) {
+  ensureFields(metadata, ['version', 'notes', 'pub_date', 'platforms'])
+  ensure(metadata.version === plan.version, 'updater metadata version mismatch')
+  ensure(!Number.isNaN(Date.parse(metadata.pub_date)), 'invalid updater metadata date')
+  ensureFields(metadata.platforms, [UPDATER_PLATFORM])
+  const expected = updaterMetadata(plan, signature, new Date(metadata.pub_date)).platforms[UPDATER_PLATFORM]
+  ensure(JSON.stringify(metadata.platforms[UPDATER_PLATFORM]) === JSON.stringify(expected), 'updater metadata must point at this release archive and signature')
+}
+
+// The archive replaces installed apps, so verify what users will unpack, not just what was packed.
+function verifyUpdaterArchive(archive, app, context) {
+  const { directory, run, notary } = context
+  const extracted = path.join(directory, 'updater-archive-check')
+  mkdirSync(extracted)
+  run('tar', ['-xzf', archive, '-C', extracted], 'updater-archive-extract', notary)
+  const roots = readdirSync(extracted)
+  ensure(roots.length === 1 && roots[0].normalize('NFC') === path.basename(app).normalize('NFC'), 'updater archive must contain only the application bundle')
+  const payload = path.join(extracted, roots[0])
+  ensure(hashFile(binary(payload)) === hashFile(binary(app)), 'updater executable differs from notarized application')
+  verifyApp(payload, context)
+  run('xcrun', ['stapler', 'validate', payload], 'updater-payload-ticket', notary)
+  rmSync(extracted, { recursive: true, force: true })
+}
+
+function createUpdaterArtifacts(app, context) {
+  const { directory, plan, root, run, notary, compile, updaterSigning } = context
+  const names = updaterFileNames(plan.version)
+  const archive = path.join(directory, names.archive)
+  run('tar', ['--no-mac-metadata', '--no-xattrs', '-czf', archive, '-C', path.dirname(app), path.basename(app)], 'updater-archive', { ...notary, COPYFILE_DISABLE: '1' })
+  verifyUpdaterArchive(archive, app, context)
+  run('pnpm', ['tauri', 'signer', 'sign', '--app-version', plan.version, archive], 'updater-sign', { ...compile, ...updaterSigning })
+  const signature = readFileSync(path.join(directory, names.signature), 'utf8').trim()
+  verifySignedUpdater(readFileSync(archive), signature, plan, root)
+  const metadata = updaterMetadata(plan, signature, new Date())
+  validateUpdaterMetadata(metadata, signature, plan)
+  writeJson(path.join(directory, names.metadata), metadata)
+  return names
+}
+
+const fileEntry = (directory, file) => ({ file, sha256: hashFile(path.join(directory, file)) })
+const releaseAssets = (manifest) => [manifest.dmg, ...Object.values(manifest.updater)]
+
+export function checksumText(manifest, manifestSha256) {
+  return `${releaseAssets(manifest).map(({ file, sha256 }) => `${sha256}  ${file}\n`).join('')}${manifestSha256}  manifest.json\n`
+}
+
+function writeManifest(context, dmg, updaterNames, notarization) {
   const { plan, directory } = context
-  const manifest = { tag: plan.tag, version: plan.version, sourceSHA: plan.sha, target: TARGET, architecture: 'arm64', teamIdentifier: TEAM, dmg: { file: path.basename(dmg), sha256: hashFile(dmg) }, notarization }
+  const updater = Object.fromEntries(Object.entries(updaterNames).map(([role, file]) => [role, fileEntry(directory, file)]))
+  const manifest = { tag: plan.tag, version: plan.version, sourceSHA: plan.sha, target: TARGET, architecture: 'arm64', teamIdentifier: TEAM, dmg: fileEntry(directory, path.basename(dmg)), updater, notarization }
   validateManifest(manifest, plan)
   writeJson(path.join(directory, 'manifest.json'), manifest)
-  writeFileSync(path.join(directory, 'SHA256SUMS'), `${manifest.dmg.sha256}  ${manifest.dmg.file}\n${hashFile(path.join(directory, 'manifest.json'))}  manifest.json\n`)
+  writeFileSync(path.join(directory, 'SHA256SUMS'), checksumText(manifest, hashFile(path.join(directory, 'manifest.json'))))
   return manifest
 }
 
@@ -291,12 +403,13 @@ export function buildRelease(plan, options = {}) {
   mkdirSync(context.directory, { recursive: true })
   buildNative(context, buildFrontend(context))
   const { app, id: appId } = notarizeApp(context)
+  const updaterNames = createUpdaterArtifacts(app, context)
   const dmg = createDmg(app, context)
   const dmgId = notarize(dmg, 'dmg', context)
   staple(dmg, context.run, context.notary)
   assessArtifacts(app, dmg, context)
   verifyMountedDmg(dmg, app, context)
-  return writeManifest(context, dmg, { app: appId, dmg: dmgId })
+  return writeManifest(context, dmg, updaterNames, { app: appId, dmg: dmgId })
 }
 
 function verifyMountedDmg(dmg, app, context) {
@@ -330,6 +443,16 @@ function validateInstaller(dmg, version) {
   ensure(/^[a-f0-9]{64}$/.test(dmg.sha256), 'invalid manifest installer checksum')
 }
 
+function validateUpdaterFiles(updater, version) {
+  ensureFields(updater, ['archive', 'signature', 'metadata'])
+  const names = updaterFileNames(version)
+  for (const role of ['archive', 'signature', 'metadata']) {
+    ensureFields(updater[role], ['file', 'sha256'])
+    ensure(updater[role].file === names[role], `invalid manifest updater ${role} filename`)
+    ensure(/^[a-f0-9]{64}$/.test(updater[role].sha256), `invalid manifest updater ${role} checksum`)
+  }
+}
+
 function validateNotarization(notarization) {
   ensureFields(notarization, ['app', 'dmg'])
   ensure(UUID.test(notarization.app), 'invalid application notarization ID')
@@ -337,7 +460,7 @@ function validateNotarization(notarization) {
 }
 
 export function validateManifest(manifest, plan) {
-  ensureFields(manifest, ['tag', 'version', 'sourceSHA', 'target', 'architecture', 'teamIdentifier', 'dmg', 'notarization'])
+  ensureFields(manifest, ['tag', 'version', 'sourceSHA', 'target', 'architecture', 'teamIdentifier', 'dmg', 'updater', 'notarization'])
   ensure(manifest.tag === plan.tag, 'manifest tag mismatch')
   ensure(manifest.version === plan.version, 'manifest version mismatch')
   ensure(manifest.sourceSHA === plan.sha, 'manifest source mismatch')
@@ -345,6 +468,7 @@ export function validateManifest(manifest, plan) {
   ensure(manifest.architecture === 'arm64', 'manifest architecture mismatch')
   ensure(manifest.teamIdentifier === TEAM, 'manifest signing team mismatch')
   validateInstaller(manifest.dmg, plan.version)
+  validateUpdaterFiles(manifest.updater, plan.version)
   validateNotarization(manifest.notarization)
 }
 
@@ -356,9 +480,11 @@ export function draftRelease(plan, { root = ROOT, run = runner(root) } = {}) {
   const directory = path.join(root, plan.outputDir)
   const manifest = json(path.join(directory, 'manifest.json'))
   validateManifest(manifest, plan)
-  ensure(hashFile(path.join(directory, manifest.dmg.file)) === manifest.dmg.sha256, 'installer checksum mismatch')
-  const checksums = `${manifest.dmg.sha256}  ${manifest.dmg.file}\n${hashFile(path.join(directory, 'manifest.json'))}  manifest.json\n`
-  ensure(readFileSync(path.join(directory, 'SHA256SUMS'), 'utf8') === checksums, 'SHA256SUMS mismatch')
+  for (const asset of releaseAssets(manifest)) ensure(hashFile(path.join(directory, asset.file)) === asset.sha256, `${asset.file} checksum mismatch`)
+  const signature = readFileSync(path.join(directory, manifest.updater.signature.file), 'utf8').trim()
+  verifySignedUpdater(readFileSync(path.join(directory, manifest.updater.archive.file)), signature, plan, root)
+  validateUpdaterMetadata(json(path.join(directory, manifest.updater.metadata.file)), signature, plan)
+  ensure(readFileSync(path.join(directory, 'SHA256SUMS'), 'utf8') === checksumText(manifest, hashFile(path.join(directory, 'manifest.json'))), 'SHA256SUMS mismatch')
   run('git', ['merge-base', '--is-ancestor', plan.sha, 'origin/main'], 'source-on-main')
   ensure(run('gh', ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], 'github-repository') === REPO, 'GitHub repository must be hdoria/metis')
   const ci = JSON.parse(run('gh', ['run', 'list', '--repo', REPO, '--workflow', 'ci.yml', '--commit', plan.sha, '--status', 'success', '--limit', '100', '--json', 'headSha,conclusion'], 'ci-gate'))
@@ -367,18 +493,19 @@ export function draftRelease(plan, { root = ROOT, run = runner(root) } = {}) {
   const existing = releases.find((release) => release.tagName === plan.tag)
   if (existing) validateDraft(JSON.parse(run('gh', ['release', 'view', plan.tag, '--repo', REPO, '--json', 'tagName,isDraft,targetCommitish'], 'release-check')), plan)
   const notes = path.join(directory, 'release-notes.md')
-  writeFileSync(notes, `Apple Silicon macOS installer for Métis ${plan.version}.\n\nSource commit: ${plan.sha}\nArchitecture: arm64\nSigning team: ${TEAM}\nApple notarization: accepted for the application and disk image.\n\nInstall: open the DMG and drag Métis into Applications.\nChecksums and provenance are attached in SHA256SUMS and manifest.json.\n`)
+  writeFileSync(notes, `Apple Silicon macOS installer for Métis ${plan.version}.\n\nSource commit: ${plan.sha}\nArchitecture: arm64\nSigning team: ${TEAM}\nApple notarization: accepted for the application and disk image.\n\nInstall: open the DMG and drag Métis into Applications. Installed copies update themselves from the signed updater archive.\nChecksums and provenance are attached in SHA256SUMS and manifest.json.\n`)
   if (!existing) run('gh', ['release', 'create', plan.tag, '--repo', REPO, '--draft', '--target', plan.sha, '--title', `Métis ${plan.version} (macOS Apple Silicon)`, '--notes-file', notes], 'draft-create')
   // Recheck after creation and immediately before replacement of any attachments.
   validateDraft(JSON.parse(run('gh', ['release', 'view', plan.tag, '--repo', REPO, '--json', 'tagName,isDraft,targetCommitish'], 'draft-recheck')), plan)
-  run('gh', ['release', 'upload', plan.tag, ...[manifest.dmg.file, 'manifest.json', 'SHA256SUMS'].map((name) => path.join(directory, name)), '--repo', REPO, '--clobber'], 'draft-upload')
+  run('gh', ['release', 'upload', plan.tag, ...[...releaseAssets(manifest).map(({ file }) => file), 'manifest.json', 'SHA256SUMS'].map((name) => path.join(directory, name)), '--repo', REPO, '--clobber'], 'draft-upload')
 }
 
 if (process.argv[1] === import.meta.filename) {
   try {
     const { command, tag } = parseArgs(process.argv.slice(2))
+    const updaterSigning = command === 'build' ? takeUpdaterSigningEnvironment(process.env) : undefined
     const plan = createPlan(tag)
-    if (command === 'build') buildRelease(plan)
+    if (command === 'build') buildRelease(plan, { updaterSigning })
     if (command === 'draft') draftRelease(plan)
     process.stdout.write(`${JSON.stringify(plan, null, 2)}\n`)
   } catch (error) {

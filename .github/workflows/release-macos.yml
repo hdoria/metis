@@ -69,8 +69,10 @@ jobs:
           METIS_SENTRY_DESKTOP_DSN: ${{ secrets.METIS_SENTRY_DESKTOP_DSN }}
           METIS_SENTRY_NATIVE_DSN: ${{ secrets.METIS_SENTRY_NATIVE_DSN }}
           METIS_TLDRAW_LICENSE_KEY: ${{ secrets.METIS_TLDRAW_LICENSE_KEY }}
+          METIS_UPDATER_PRIVATE_KEY: ${{ secrets.METIS_UPDATER_PRIVATE_KEY }}
+          METIS_UPDATER_KEY_PASSWORD: ${{ secrets.METIS_UPDATER_KEY_PASSWORD }}
         run: |
-          for key in METIS_APPLE_CERTIFICATE METIS_APPLE_CERTIFICATE_PASSWORD METIS_APPLE_NOTARY_PASSWORD METIS_SENTRY_AUTH_TOKEN METIS_SENTRY_DESKTOP_DSN METIS_SENTRY_NATIVE_DSN METIS_TLDRAW_LICENSE_KEY; do
+          for key in METIS_APPLE_CERTIFICATE METIS_APPLE_CERTIFICATE_PASSWORD METIS_APPLE_NOTARY_PASSWORD METIS_SENTRY_AUTH_TOKEN METIS_SENTRY_DESKTOP_DSN METIS_SENTRY_NATIVE_DSN METIS_TLDRAW_LICENSE_KEY METIS_UPDATER_PRIVATE_KEY METIS_UPDATER_KEY_PASSWORD; do
             if [ -z "${!key}" ]; then
               echo "::error::Missing repository secret: $key. See docs/macos-release.md."
               exit 1
@@ -100,13 +102,15 @@ jobs:
           METIS_APPLE_NOTARY_PASSWORD: ${{ secrets.METIS_APPLE_NOTARY_PASSWORD }}
         run: node scripts/macos-release-keychain.mjs setup
 
-      - name: Build, upload symbols, sign, notarize and verify
+      - name: Build, upload symbols, sign, notarize, sign updater and verify
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           VITE_SENTRY_DSN: ${{ secrets.METIS_SENTRY_DESKTOP_DSN }}
           SENTRY_DSN: ${{ secrets.METIS_SENTRY_NATIVE_DSN }}
           VITE_TLDRAW_LICENSE_KEY: ${{ secrets.METIS_TLDRAW_LICENSE_KEY }}
           SENTRY_AUTH_TOKEN: ${{ secrets.METIS_SENTRY_AUTH_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.METIS_UPDATER_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.METIS_UPDATER_KEY_PASSWORD }}
           SENTRY_FORCE_ENV_TOKEN: '1'
           SENTRY_ORG: popcode
           SENTRY_FRONTEND_PROJECT: metis-desktop
